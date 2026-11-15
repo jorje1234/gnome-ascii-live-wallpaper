@@ -51,6 +51,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         this._origAnimWbCreateBg = null;
         this._overviewChildAddedId = 0;
         this._uiChildAddedId = 0;
+        this._panelChildAddedId = 0;
         this._overviewShowingId = 0;
         this._settingsIds = [];
 
@@ -388,6 +389,12 @@ export default class AsciiLiveWallpaperExtension extends Extension {
                     this._attachBmsClones(child);
             });
         }
+        if (!this._panelChildAddedId && Main.layoutManager.panelBox?.connect) {
+            this._panelChildAddedId = Main.layoutManager.panelBox.connect('child-added', (_g, child) => {
+                if (child?.name === 'bms-panel-backgroundgroup')
+                    this._attachBmsClones(child);
+            });
+        }
         if (!this._overviewShowingId && Main.overview?.connect) {
             this._overviewShowingId = Main.overview.connect('showing', () => {
                 this._attachBmsClones(Main.layoutManager.overviewGroup);
@@ -413,6 +420,10 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         if (this._uiChildAddedId && Main.uiGroup?.disconnect) {
             Main.uiGroup.disconnect(this._uiChildAddedId);
             this._uiChildAddedId = 0;
+        }
+        if (this._panelChildAddedId && Main.layoutManager.panelBox?.disconnect) {
+            Main.layoutManager.panelBox.disconnect(this._panelChildAddedId);
+            this._panelChildAddedId = 0;
         }
         if (this._overviewShowingId && Main.overview?.disconnect) {
             Main.overview.disconnect(this._overviewShowingId);
@@ -475,32 +486,142 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         }
     }
 
-    _findBmsSources(actor) {
+    _findBmsGroups(actor) {
         if (!actor)
             return [];
         if (
-            actor.name === 'bms-overview-blurred-widget-source' ||
-            actor.name === 'bms-animation-blurred-widget-source'
+            actor.name === 'bms-overview-backgroundgroup' ||
+            actor.name === 'bms-animation-backgroundgroup' ||
+            actor.name === 'bms-panel-backgroundgroup'
         ) {
             return [actor];
         }
-        return (actor.get_children?.() ?? []).flatMap(c => this._findBmsSources(c));
+        return (actor.get_children?.() ?? []).flatMap(c => this._findBmsGroups(c));
+    }
+
+    _trackBmsActor(group, actor) {
+        actor.connect('destroy', () => {
+            const idx = this._overviewClones.indexOf(actor);
+            if (idx !== -1)
+                this._overviewClones.splice(idx, 1);
+        });
+        group.add_child(actor);
+        group.set_child_above_sibling(actor, null);
+        this._overviewClones.push(actor);
+    }
+
+    _attachBmsPanelClone(group) {
+        const panelBox = Main.layoutManager.panelBox || group.get_parent?.();
+        const px = panelBox?.x ?? 0;
+        const py = panelBox?.y ?? 0;
+        const monitor = Main.layoutManager.monitors.find(
+            m => px >= m.x && px < m.x + m.width && py >= m.y && py < m.y + m.height
+        ) || Main.layoutManager.primaryMonitor || Main.layoutManager.monitors[0];
+        if (!monitor)
+            return;
+
+        const monitorActor = this._actors.find(a => a._monitor.index === monitor.index) || this._actors[0];
+        if (!monitorActor)
+            return;
+
+        const existingWrap = group.get_children().find(c => c.name === 'ascii-panel-clone-wrap');
+        if (existingWrap && existingWrap._sourceActor === monitorActor) {
+            group.set_child_above_sibling(existingWrap, null);
+            return;
+        }
+        if (existingWrap)
+            existingWrap.destroy();
+
+        const clipWrap = new Clutter.Actor({
+            name: 'ascii-panel-clone-wrap',
+            x: 0,
+            y: 0,
+            width: panelBox?.width || monitor.width,
+            height: panelBox?.height || 32,
+            clip_to_allocation: true,
+        });
+        clipWrap.add_effect?.(new Shell.BlurEffect({
+            name: 'ascii-panel-blur',
+            radius: 6,
+            brightness: 0.55,
+            mode: Shell.BlurMode.ACTOR,
+        }));
+        clipWrap._sourceActor = monitorActor;
+        if (panelBox && Clutter.BindConstraint) {
+            clipWrap.add_constraint(new Clutter.BindConstraint({
+                source: panelBox,
+                coordinate: Clutter.BindCoordinate.SIZE,
+            }));
+        }
+
+        const clone = new Clutter.Clone({
+            name: 'ascii-overview-clone',
+            source: monitorActor,
+            x: monitor.x - px,
+            y: monitor.y - py,
+            width: monitor.width,
+            height: monitor.height,
+        });
+        clipWrap.add_child(clone);
+        this._trackBmsActor(group, clipWrap);
     }
 
     _attachBmsClones(root) {
-        for (const source of this._findBmsSources(root)) {
-            const bgChild = source.get_children().find(c => c.monitor !== undefined);
-            const monitorIndex = bgChild ? bgChild.monitor : 0;
-            const monitorActor = this._actors.find(a => a._monitor.index === monitorIndex) || this._actors[0];
-            if (!monitorActor)
-                continue;
+        try {
+            for (const group of this._findBmsGroups(root)) {
+                if (group.name === 'bms-panel-backgroundgroup') {
+                    this._attachBmsPanelClone(group);
+                    continue;
+                }
 
-            const existing = source.get_children().find(c => c.name === 'ascii-overview-clone');
-            if (existing && existing.source === monitorActor) {
-                source.set_child_above_sibling(existing, null);
-                continue;
+                const bmsWidgets = group.get_children().filter(c => c.name?.endsWith('-blurred-widget'));
+                for (const monitor of Main.layoutManager.monitors) {
+                    const monitorActor = this._actors.find(a => a._monitor.index === monitor.index) || this._actors[0];
+                    if (!monitorActor)
+                        continue;
+
+                    const cloneName = `ascii-bms-clone-${monitor.index}`;
+                    const existing = group.get_children().find(c => c.name === cloneName);
+                    if (existing && existing.source === monitorActor) {
+                        group.set_child_above_sibling(existing, null);
+                        continue;
+                    }
+                    if (existing)
+                        existing.destroy();
+
+                    const halfW = Math.max(160, Math.round(monitor.width * 0.5));
+                    const halfH = Math.max(100, Math.round(monitor.height * 0.5));
+                    const clone = new Clutter.Clone({
+                        name: cloneName,
+                        source: monitorActor,
+                        x: monitor.x,
+                        y: monitor.y,
+                        width: halfW,
+                        height: halfH,
+                        scale_x: 2,
+                        scale_y: 2,
+                    });
+                    clone.add_effect?.(new Shell.BlurEffect({
+                        name: 'ascii-backdrop-blur',
+                        radius: 8,
+                        brightness: 0.48,
+                        mode: Shell.BlurMode.ACTOR,
+                    }));
+
+                    const matchingWidget = bmsWidgets.find(w => w.x === monitor.x && w.y === monitor.y);
+                    if (matchingWidget?.bind_property) {
+                        matchingWidget.bind_property(
+                            'visible',
+                            clone,
+                            'visible',
+                            GObject.BindingFlags.SYNC_CREATE
+                        );
+                    }
+                    this._trackBmsActor(group, clone);
+                }
             }
-            this._addCloneToBgContainer(source, monitorIndex, true);
+        } catch (e) {
+            console.error('[ascii-live-wallpaper] bms backdrop error:', e);
         }
     }
 
@@ -509,6 +630,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             this._addCloneToWorkspaceBg(wb);
         this._attachBmsClones(Main.layoutManager.overviewGroup);
         this._attachBmsClones(Main.uiGroup);
+        this._attachBmsClones(Main.layoutManager.panelBox);
     }
 
     _onRepaint(area) {
