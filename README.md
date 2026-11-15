@@ -24,7 +24,7 @@ Instead of spawning heavy video players (`mpv` / WebKit), it renders procedural 
 ## Where to Get Designs
 
 1. **ASCII Magic Gallery (Animated `.js` pieces):** Browse hundreds of animated pieces at **[ascii-magic.com/ascii](https://www.ascii-magic.com/ascii)** — copy any piece URL (e.g. `https://www.ascii-magic.com/ascii/black-hole`) or name (`black-hole`), paste it in **Preferences → Designs → Download**, and click **Download**.
-2. **ASCII Magic Studio (Create / Convert):** Create or convert your own artwork at **[ascii-magic.com/ascii/studio](https://www.ascii-magic.com/ascii/studio)** and import the exported `.js` file via **Browse...** in Preferences.
+2. **ASCII Magic Editor (Create / Convert):** Create or convert images/videos into ASCII art at **[ascii-magic.com/app](https://www.ascii-magic.com/app)** and import the exported `.txt` or `.js` file via **Browse...** in Preferences.
 3. **Plain Text ASCII Art (`.txt`):** Grab any static ASCII art (from [asciiart.eu](https://www.asciiart.eu), `ascii-image-converter`, `jp2a`, or any text editor) and load the `.txt` file via **Preferences → Designs → Browse...** (or `ascii-wallpaper set ./my-art.txt`). It is automatically converted into an animated piece that works in Halftone Dots, Letters, Binary, etc.
 4. **Write Your Own Procedural Animation:** See [CONTRIBUTING.md](CONTRIBUTING.md) for the 15-line `kit.js` template and how to share designs via Pull Request.
 
