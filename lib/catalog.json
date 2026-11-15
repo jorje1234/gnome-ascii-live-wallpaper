@@ -1,0 +1,17 @@
+[
+  { "slug": "spiral-galaxy", "name": "Spiral Galaxy", "category": "cosmos", "note": "Two-armed spiral galaxy turning slowly with golden core and pink star nurseries." },
+  { "slug": "black-hole", "name": "Black Hole", "category": "cosmos", "note": "Accretion disk swirling around a gravitationally lensed shadow." },
+  { "slug": "aurora-curtains", "name": "Aurora Curtains", "category": "nature", "note": "Three folded ribbons of aurora swaying across a starry sky." },
+  { "slug": "nebula-drift", "name": "Nebula Drift", "category": "cosmos", "note": "Drifting cosmic gas clouds illuminated from within." },
+  { "slug": "binary-stars", "name": "Binary Stars", "category": "cosmos", "note": "Two orbiting stars exchanging stellar matter." },
+  { "slug": "meteor-shower", "name": "Meteor Shower", "category": "cosmos", "note": "Shooting stars streaking across the night horizon." },
+  { "slug": "aurora-cabin-snowfall", "name": "Aurora Cabin Snowfall", "category": "nature", "note": "Cozy cabin under glowing northern lights and falling snow." },
+  { "slug": "bamboo-grove-path", "name": "Bamboo Grove Path", "category": "nature", "note": "Swaying emerald bamboo stalks along a tranquil mist path." },
+  { "slug": "arctic-icebergs", "name": "Arctic Icebergs", "category": "nature", "note": "Drifting polar icebergs on cold arctic waters." },
+  { "slug": "autumn-forest", "name": "Autumn Forest", "category": "nature", "note": "Golden and crimson leaves drifting down in a quiet woods." },
+  { "slug": "alien-wave", "name": "Alien Wave", "category": "demoscene", "note": "Hypnotic oscillating interference wave." },
+  { "slug": "apollonian-gasket", "name": "Apollonian Gasket", "category": "demoscene", "note": "Animated fractal circle packing geometry." },
+  { "slug": "binary-tree", "name": "Binary Tree", "category": "demoscene", "note": "Recursive organic branching fractal swaying gently." },
+  { "slug": "analog-clock", "name": "Analog Clock", "category": "utility", "note": "Clean animated timepiece rendered in real time." },
+  { "slug": "spinning-torus", "name": "Spinning Torus", "category": "demoscene", "note": "Classic 3D shaded rotating torus." }
+]

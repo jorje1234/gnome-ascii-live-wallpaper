@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+UUID="gnome-ascii-live-wallpaper@github"
+EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+SCHEMA="org.gnome.shell.extensions.gnome-ascii-live-wallpaper"
+USER_PIECES="$HOME/.config/ascii-wallpaper/pieces"
+USER_LIB="$HOME/.config/ascii-wallpaper/lib"
+
+mkdir -p "$USER_PIECES"
+if [[ -d "$EXT_DIR/lib" ]] && [[ ! -e "$USER_LIB" ]]; then
+  ln -sfn "$EXT_DIR/lib" "$USER_LIB"
+fi
+
+gs_get() {
+  gsettings --schemadir "$EXT_DIR/schemas" get "$SCHEMA" "$1"
+}
+
+gs_set() {
+  gsettings --schemadir "$EXT_DIR/schemas" set "$SCHEMA" "$1" "$2"
+}
+
+ensure_piece() {
+  local raw="$1"
+  if [[ -f "$raw" ]]; then
+    local base slug target
+    base=$(basename "$raw")
+    slug=$(echo "${base%.*}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+    [[ -z "$slug" ]] && slug="custom-art"
+    target="$USER_PIECES/${slug}.js"
+    if [[ "${base,,}" == *.txt ]]; then
+      python3 - "$raw" "$target" "$slug" "${base%.*}" << 'PY' || exit 1
+import json, re, sys
+raw_path, target_path, slug, name = sys.argv[1:5]
+text = open(raw_path, "r", encoding="utf-8", errors="replace").read()
+text = re.sub(r"\x1b\[[0-9;]*m", "", text).replace("\r\n", "\n")
+lines = text.split("\n")
+while lines and not lines[-1].strip():
+    lines.pop()
+if not lines:
+    sys.stderr.write("Error: text file is empty.\n")
+    sys.exit(1)
+rows = min(80, len(lines))
+lines = lines[:rows]
+cols = min(200, max([10, *(len(l) for l in lines)]))
+padded = [l[:cols].ljust(cols) for l in lines]
+js = f'''import {{ Grid, palette, gradient, KEYS }} from "../lib/kit.js";
+const PAL = gradient(["#4c6ef5", "#74c0fc", "#ffffff", "#f783ac"], 12);
+export const meta = {{ slug: {json.dumps(slug)}, name: {json.dumps(name)}, category: "custom", cols: {cols}, rows: {rows}, fps: 18, palette: palette(PAL) }};
+const LINES = {json.dumps(padded)};
+export default function create() {{
+  const g = new Grid({cols}, {rows});
+  return (t) => {{
+    g.clear();
+    for (let y = 0; y < {rows}; y++) {{
+      const row = LINES[y] || "";
+      for (let x = 0; x < {cols}; x++) {{
+        const ch = row[x];
+        if (!ch || ch === " ") continue;
+        const p = 0.5 + 0.5 * Math.sin(t * 1.8 + x * 0.09 + y * 0.16);
+        g.set(x, y, ch, KEYS[Math.min(PAL.length - 1, Math.floor(p * PAL.length))]);
+      }}
+    }}
+    return g.frame();
+  }};
+}}
+'''
+open(target_path, "w", encoding="utf-8").write(js)
+PY
+    else
+      python3 - "$raw" "$target" "$EXT_DIR/lib/kit.js" << 'PY' || exit 1
+import re, sys
+src_path, target_path, kit_path = sys.argv[1:4]
+src = open(src_path, "r", encoding="utf-8", errors="replace").read()
+if "export" not in src or ("meta" not in src and "default" not in src):
+    sys.stderr.write("Error: file is not a valid ASCII Magic .js piece.\n")
+    sys.exit(1)
+src = re.sub(
+    r'from\s+["\'](?:\.\./lib/kit\.js|\./kit\.js|https?://[^"\']*/kit\.js)["\']',
+    f'from "file://{kit_path}"',
+    src,
+)
+open(target_path, "w", encoding="utf-8").write(src)
+PY
+    fi
+    echo "$slug"
+    return
+  fi
+
+  local slug
+  slug=$(echo "$raw" | sed -E 's|https?://[^/]+/ascii/(pieces/)?||; s|\.js(\?.*)?$||; s|[^a-zA-Z0-9-]||g' | tr '[:upper:]' '[:lower:]')
+  if [[ -z "$slug" ]]; then
+    echo "Invalid piece name or URL: $raw" >&2
+    exit 1
+  fi
+  if [[ -s "$USER_PIECES/${slug}.js" ]] || [[ -s "$EXT_DIR/pieces/${slug}.js" ]]; then
+    echo "$slug"
+    return
+  fi
+
+  echo "Downloading '$slug' from ascii-magic.com..." >&2
+  local tmp="$USER_PIECES/${slug}.js.tmp"
+  if ! curl -sfL "https://www.ascii-magic.com/ascii/pieces/${slug}.js" -o "$tmp"; then
+    rm -f "$tmp"
+    echo "Piece '$slug' not found at https://www.ascii-magic.com/ascii/pieces/${slug}.js" >&2
+    exit 1
+  fi
+  mv "$tmp" "$USER_PIECES/${slug}.js"
+  echo "$slug"
+}
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+  on|start|enable)
+    gs_set enabled true
+    echo "Live wallpaper enabled."
+    ;;
+  off|stop|disable)
+    gs_set enabled false
+    echo "Live wallpaper paused/disabled (0% CPU)."
+    ;;
+  toggle)
+    cur=$(gs_get enabled)
+    if [[ "$cur" == "true" ]]; then
+      gs_set enabled false
+      echo "Live wallpaper: OFF"
+    else
+      gs_set enabled true
+      echo "Live wallpaper: ON"
+    fi
+    ;;
+  set|piece)
+    [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper set <slug|url|file.js|file.txt> [look]"; exit 1; }
+    slug=$(ensure_piece "$1") || exit 1
+    gs_set piece "'$slug'"
+    [[ $# -ge 2 ]] && gs_set look "'$2'"
+    gs_set enabled true
+    echo "Wallpaper set to: $slug (look: $(gs_get look))"
+    ;;
+  fps)
+    [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper fps <5..60>"; exit 1; }
+    gs_set fps "$1"
+    echo "FPS set to: $1"
+    ;;
+  scale|res|resolution)
+    [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper scale <0.35..1.0>"; exit 1; }
+    gs_set render-scale "$1"
+    echo "Render scale set to: $1"
+    ;;
+  look|style)
+    [[ $# -lt 1 ]] && { echo "Looks: dots, squares, original, blocks, ascii, dense, lines, dither, numbers, binary, letters"; exit 1; }
+    gs_set look "'$1'"
+    echo "Look set to: $1"
+    ;;
+  speed)
+    [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper speed <0.1..3.0>"; exit 1; }
+    gs_set speed "$1"
+    echo "Speed set to: ${1}x"
+    ;;
+  fit)
+    [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper fit <cover|contain>"; exit 1; }
+    gs_set fit "'$1'"
+    echo "Fit set to: $1"
+    ;;
+  prefs|gui|settings)
+    gnome-extensions prefs "$UUID"
+    ;;
+  list)
+    echo "Built-in pieces ($EXT_DIR/pieces):"
+    ls -1 "$EXT_DIR/pieces" 2>/dev/null | sed 's/\.js$//; s/^/  - /' || true
+    echo ""
+    echo "Custom / downloaded pieces ($USER_PIECES):"
+    ls -1 "$USER_PIECES" 2>/dev/null | sed 's/\.js$//; s/^/  - /' || true
+    ;;
+  status|*)
+    echo "Enabled:      $(gs_get enabled)"
+    echo "Piece:        $(gs_get piece)"
+    echo "Look:         $(gs_get look)"
+    echo "FPS:          $(gs_get fps)"
+    echo "Render scale: $(gs_get render-scale)"
+    echo "Speed:        $(gs_get speed)"
+    echo "Fit:          $(gs_get fit)"
+    ;;
+esac

@@ -1,0 +1,16 @@
+{
+  "uuid": "gnome-ascii-live-wallpaper@github",
+  "name": "GNOME ASCII Live Wallpaper",
+  "description": "Renders animated procedural ASCII art and Halftone Dots wallpapers natively in the GNOME Shell background layer, with Quick Settings ON/OFF toggle, FPS/resolution controls, and ASCII Magic piece importer.",
+  "shell-version": [
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.gnome-ascii-live-wallpaper",
+  "url": "https://github.com/jorje1234/gnome-ascii-live-wallpaper",
+  "version": 1
+}
