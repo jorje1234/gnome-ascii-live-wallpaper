@@ -15,6 +15,10 @@
       <default>'dots'</default>
       <summary>Visual render look</summary>
     </key>
+    <key name="custom-chars" type="s">
+      <default>''</default>
+      <summary>Optional custom character ramp (overrides look glyphs when non-empty)</summary>
+    </key>
     <key name="fps" type="i">
       <range min="5" max="60"/>
       <default>30</default>

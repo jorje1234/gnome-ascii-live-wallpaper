@@ -25,11 +25,6 @@ ln -sfn "$DEST/lib" "$USER_CONFIG/lib"
 # Install CLI helper
 install -m 755 "$ROOT/cli/ascii-wallpaper" "$BIN_DIR/ascii-wallpaper"
 
-# Disable legacy prototype UUID if present
-if gnome-extensions info ascii-wallpaper@papu >/dev/null 2>&1; then
-  gnome-extensions disable ascii-wallpaper@papu >/dev/null 2>&1 || true
-fi
-
 # Enable extension (if Wayland hasn't rescanned yet, register in GSettings for next login)
 if ! gnome-extensions enable "$UUID" >/dev/null 2>&1; then
   if command -v gsettings >/dev/null 2>&1; then

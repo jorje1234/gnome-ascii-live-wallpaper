@@ -124,6 +124,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         return {
             piece: slug,
             look: s.get_string('look') || 'dots',
+            chars: s.get_string('custom-chars') || '',
             fps: s.get_int('fps') || 30,
             renderScale: s.get_double('render-scale') || 0.65,
             speed: s.get_double('speed') || 1.0,
@@ -184,7 +185,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             this._queueAllRepaints();
         });
 
-        for (const key of ['look', 'speed', 'fit', 'bg', 'ink', 'dot-size', 'density', 'contrast', 'mono', 'all-glyphs']) {
+        for (const key of ['look', 'custom-chars', 'speed', 'fit', 'bg', 'ink', 'dot-size', 'density', 'contrast', 'mono', 'all-glyphs']) {
             on(key, () => {
                 if (!this._isEnabled())
                     return;

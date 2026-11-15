@@ -152,7 +152,13 @@ case "$cmd" in
   look|style)
     [[ $# -lt 1 ]] && { echo "Looks: dots, squares, original, blocks, ascii, dense, lines, dither, numbers, binary, letters"; exit 1; }
     gs_set look "'$1'"
-    echo "Look set to: $1"
+    if [[ $# -ge 2 ]]; then
+      gs_set custom-chars "'$2'"
+      echo "Look set to: $1 (custom chars: $2)"
+    else
+      gs_set custom-chars "''"
+      echo "Look set to: $1"
+    fi
     ;;
   speed)
     [[ $# -lt 1 ]] && { echo "Usage: ascii-wallpaper speed <0.1..3.0>"; exit 1; }

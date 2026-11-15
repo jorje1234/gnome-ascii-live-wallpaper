@@ -334,6 +334,15 @@ export default class AsciiLiveWallpaperPreferences extends ExtensionPreferences 
         });
         settings.bind('all-glyphs', allGlyphsRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         lookGroup.add(allGlyphsRow);
+
+        const customCharsRow = new Adw.EntryRow({
+            title: 'Custom Character Ramp (optional, for text looks)',
+            text: settings.get_string('custom-chars') || '',
+        });
+        customCharsRow.connect('changed', () => {
+            settings.set_string('custom-chars', customCharsRow.text);
+        });
+        lookGroup.add(customCharsRow);
         stylePage.add(lookGroup);
 
         const tuningGroup = new Adw.PreferencesGroup({ title: 'Halftone &amp; Colors' });
