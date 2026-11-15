@@ -49,6 +49,9 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         this._currentFrame = null;
         this._origWbInit = null;
         this._origAnimWbCreateBg = null;
+        this._overviewChildAddedId = 0;
+        this._uiChildAddedId = 0;
+        this._overviewShowingId = 0;
         this._settingsIds = [];
 
         this._settings = this.getSettings();
@@ -374,6 +377,23 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             };
         }
 
+        if (!this._overviewChildAddedId && Main.layoutManager.overviewGroup?.connect) {
+            this._overviewChildAddedId = Main.layoutManager.overviewGroup.connect('child-added', (_g, child) => {
+                this._attachBmsClones(child);
+            });
+        }
+        if (!this._uiChildAddedId && Main.uiGroup?.connect) {
+            this._uiChildAddedId = Main.uiGroup.connect('child-added', (_g, child) => {
+                if (child?.name === 'bms-animation-backgroundgroup')
+                    this._attachBmsClones(child);
+            });
+        }
+        if (!this._overviewShowingId && Main.overview?.connect) {
+            this._overviewShowingId = Main.overview.connect('showing', () => {
+                this._attachBmsClones(Main.layoutManager.overviewGroup);
+            });
+        }
+
         this._attachOverviewClones();
     }
 
@@ -386,6 +406,18 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             AnimWorkspaceBackground.prototype._createBackground = this._origAnimWbCreateBg;
             this._origAnimWbCreateBg = null;
         }
+        if (this._overviewChildAddedId && Main.layoutManager.overviewGroup?.disconnect) {
+            Main.layoutManager.overviewGroup.disconnect(this._overviewChildAddedId);
+            this._overviewChildAddedId = 0;
+        }
+        if (this._uiChildAddedId && Main.uiGroup?.disconnect) {
+            Main.uiGroup.disconnect(this._uiChildAddedId);
+            this._uiChildAddedId = 0;
+        }
+        if (this._overviewShowingId && Main.overview?.disconnect) {
+            Main.overview.disconnect(this._overviewShowingId);
+            this._overviewShowingId = 0;
+        }
     }
 
     _findWorkspaceBackgrounds(actor = Main.layoutManager.overviewGroup) {
@@ -393,7 +425,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             return [];
         if (actor instanceof WorkspaceBackground)
             return [actor];
-        return actor.get_children().flatMap(c => this._findWorkspaceBackgrounds(c));
+        return (actor.get_children?.() ?? []).flatMap(c => this._findWorkspaceBackgrounds(c));
     }
 
     _addCloneToWorkspaceBg(wb) {
@@ -443,9 +475,40 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         }
     }
 
+    _findBmsSources(actor) {
+        if (!actor)
+            return [];
+        if (
+            actor.name === 'bms-overview-blurred-widget-source' ||
+            actor.name === 'bms-animation-blurred-widget-source'
+        ) {
+            return [actor];
+        }
+        return (actor.get_children?.() ?? []).flatMap(c => this._findBmsSources(c));
+    }
+
+    _attachBmsClones(root) {
+        for (const source of this._findBmsSources(root)) {
+            const bgChild = source.get_children().find(c => c.monitor !== undefined);
+            const monitorIndex = bgChild ? bgChild.monitor : 0;
+            const monitorActor = this._actors.find(a => a._monitor.index === monitorIndex) || this._actors[0];
+            if (!monitorActor)
+                continue;
+
+            const existing = source.get_children().find(c => c.name === 'ascii-overview-clone');
+            if (existing && existing.source === monitorActor) {
+                source.set_child_above_sibling(existing, null);
+                continue;
+            }
+            this._addCloneToBgContainer(source, monitorIndex, true);
+        }
+    }
+
     _attachOverviewClones() {
         for (const wb of this._findWorkspaceBackgrounds())
             this._addCloneToWorkspaceBg(wb);
+        this._attachBmsClones(Main.layoutManager.overviewGroup);
+        this._attachBmsClones(Main.uiGroup);
     }
 
     _onRepaint(area) {
