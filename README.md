@@ -1,5 +1,7 @@
 # GNOME ASCII Live Wallpaper
 
+![Spiral Galaxy in Halftone Dots](assets/demo.gif)
+
 A lightweight, native **GNOME Shell (46–51)** animated ASCII art & **Halftone Dots** wallpaper extension for Wayland and X11.
 
 Instead of spawning heavy video players (`mpv` / WebKit), it renders procedural ASCII animations directly inside GNOME Shell's `_backgroundGroup` layer using ~10–12 MB of RAM, and mirrors seamlessly into the Activities Overview.
