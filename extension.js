@@ -7,6 +7,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { WorkspaceBackground } from 'resource:///org/gnome/shell/ui/workspace.js';
+import { WorkspaceBackground as AnimWorkspaceBackground } from 'resource:///org/gnome/shell/ui/workspaceAnimation.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import { renderFrame, withParams } from './lib/renderer.js';
@@ -25,6 +26,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         this._meta = null;
         this._currentFrame = null;
         this._origWbInit = null;
+        this._origAnimWbCreateBg = null;
         this._settingsIds = [];
 
         this._settings = this.getSettings();
@@ -308,7 +310,7 @@ export default class AsciiLiveWallpaperExtension extends Extension {
     }
 
     _destroyActors() {
-        for (const clone of this._overviewClones) {
+        for (const clone of [...this._overviewClones]) {
             try {
                 clone.destroy();
             } catch (_e) {}
@@ -329,16 +331,26 @@ export default class AsciiLiveWallpaperExtension extends Extension {
     }
 
     _patchWorkspaceBackground() {
-        const proto = WorkspaceBackground.prototype;
-        if (this._origWbInit)
-            return;
-
-        this._origWbInit = proto._init;
         const ext = this;
-        proto._init = function (...args) {
-            ext._origWbInit.apply(this, args);
-            ext._addCloneToWorkspaceBg(this);
-        };
+
+        if (!this._origWbInit) {
+            const proto = WorkspaceBackground.prototype;
+            this._origWbInit = proto._init;
+            proto._init = function (...args) {
+                ext._origWbInit.apply(this, args);
+                ext._addCloneToWorkspaceBg(this);
+            };
+        }
+
+        if (!this._origAnimWbCreateBg) {
+            const animProto = AnimWorkspaceBackground.prototype;
+            this._origAnimWbCreateBg = animProto._createBackground;
+            animProto._createBackground = function (...args) {
+                ext._origAnimWbCreateBg.apply(this, args);
+                ext._addCloneToBgContainer(this._bgManager?.container, this._monitor?.index, true);
+            };
+        }
+
         this._attachOverviewClones();
     }
 
@@ -346,6 +358,10 @@ export default class AsciiLiveWallpaperExtension extends Extension {
         if (this._origWbInit) {
             WorkspaceBackground.prototype._init = this._origWbInit;
             this._origWbInit = null;
+        }
+        if (this._origAnimWbCreateBg) {
+            AnimWorkspaceBackground.prototype._createBackground = this._origAnimWbCreateBg;
+            this._origAnimWbCreateBg = null;
         }
     }
 
@@ -358,25 +374,45 @@ export default class AsciiLiveWallpaperExtension extends Extension {
     }
 
     _addCloneToWorkspaceBg(wb) {
+        if (!wb || !wb._backgroundGroup)
+            return;
+        this._addCloneToBgContainer(wb._backgroundGroup, wb._monitorIndex, false);
+    }
+
+    _addCloneToBgContainer(container, monitorIndex, fixedSize = false) {
         try {
-            if (!wb || !wb._backgroundGroup)
+            if (!container)
                 return;
-            const monitorActor = this._actors.find(a => a._monitor.index === wb._monitorIndex) || this._actors[0];
+            const monitorActor = this._actors.find(a => a._monitor.index === monitorIndex) || this._actors[0];
             if (!monitorActor)
                 return;
 
-            const existing = wb._backgroundGroup.get_children().find(c => c.name === 'ascii-overview-clone');
+            const existing = container.get_children().find(c => c.name === 'ascii-overview-clone');
             if (existing)
                 existing.destroy();
 
-            const clone = new Clutter.Clone({
+            const cloneProps = {
                 name: 'ascii-overview-clone',
                 source: monitorActor,
-                x_expand: true,
-                y_expand: true,
+            };
+            if (fixedSize) {
+                cloneProps.x = 0;
+                cloneProps.y = 0;
+                cloneProps.width = monitorActor._monitor.width;
+                cloneProps.height = monitorActor._monitor.height;
+            } else {
+                cloneProps.x_expand = true;
+                cloneProps.y_expand = true;
+            }
+
+            const clone = new Clutter.Clone(cloneProps);
+            clone.connect('destroy', () => {
+                const idx = this._overviewClones.indexOf(clone);
+                if (idx !== -1)
+                    this._overviewClones.splice(idx, 1);
             });
-            wb._backgroundGroup.add_child(clone);
-            wb._backgroundGroup.set_child_above_sibling(clone, null);
+            container.add_child(clone);
+            container.set_child_above_sibling(clone, null);
             this._overviewClones.push(clone);
         } catch (e) {
             console.error('[ascii-live-wallpaper] overview clone error:', e);
