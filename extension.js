@@ -1,6 +1,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -13,6 +14,27 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { renderFrame, withParams } from './lib/renderer.js';
 import { ensureUserPiecesEnv, resolvePieceFile } from './lib/pieceManager.js';
 import { AsciiWallpaperIndicator } from './lib/quickToggle.js';
+
+function getOverviewCloneClass() {
+    if (globalThis.__AsciiOverviewWallpaperClone)
+        return globalThis.__AsciiOverviewWallpaperClone;
+
+    if (Clutter.Clone?.$gtype) {
+        globalThis.__AsciiOverviewWallpaperClone = GObject.registerClass(
+        class AsciiOverviewWallpaperClone extends Clutter.Clone {
+            vfunc_get_preferred_width(_forHeight) {
+                return [0, 0];
+            }
+
+            vfunc_get_preferred_height(_forWidth) {
+                return [0, 0];
+            }
+        });
+    } else {
+        globalThis.__AsciiOverviewWallpaperClone = class AsciiOverviewWallpaperClone extends Clutter.Clone {};
+    }
+    return globalThis.__AsciiOverviewWallpaperClone;
+}
 
 export default class AsciiLiveWallpaperExtension extends Extension {
     enable() {
@@ -406,7 +428,8 @@ export default class AsciiLiveWallpaperExtension extends Extension {
                 cloneProps.y_expand = true;
             }
 
-            const clone = new Clutter.Clone(cloneProps);
+            const CloneCtor = fixedSize ? Clutter.Clone : getOverviewCloneClass();
+            const clone = new CloneCtor(cloneProps);
             clone.connect('destroy', () => {
                 const idx = this._overviewClones.indexOf(clone);
                 if (idx !== -1)
