@@ -347,7 +347,8 @@ export default class AsciiLiveWallpaperExtension extends Extension {
             this._origAnimWbCreateBg = animProto._createBackground;
             animProto._createBackground = function (...args) {
                 ext._origAnimWbCreateBg.apply(this, args);
-                ext._addCloneToBgContainer(this._bgManager?.container, this._monitor?.index, true);
+                const container = this._bgManager?._container || this._bgManager?.container;
+                ext._addCloneToBgContainer(container, this._monitor?.index, true);
             };
         }
 
